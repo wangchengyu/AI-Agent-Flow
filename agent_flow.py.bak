@@ -1,0 +1,448 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+AI Agent Flow Implementation
+根据需求文档中的流程图实现AI Agent的工作流程
+"""
+
+import json
+import os
+from typing import List, Dict, Any, Optional
+from dataclasses import dataclass
+from enum import Enum
+import openai
+from openai import OpenAI
+
+
+class TaskType(Enum):
+    """任务类型枚举"""
+    TOOL_OPERATION = "tool_operation"  # 需要工具操作
+    AI_GENERATION = "ai_generation"   # 需要AI生成
+
+
+@dataclass
+class SubTask:
+    """子任务数据结构"""
+    id: str
+    description: str
+    task_type: TaskType
+    context: Dict[str, Any]  # 任务上下文
+    status: str = "pending"  # pending, completed, failed
+
+
+@dataclass
+class ValidationResult:
+    """验证结果数据结构"""
+    is_valid: bool
+    feedback: str
+    suggestions: List[str]
+
+
+class Agent:
+    """AI Agent执行体"""
+    
+    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None, model_name: str = "gpt-3.5-turbo"):
+        """
+        初始化Agent
+        
+        Args:
+            api_key: OpenAI API密钥，如果为None则从环境变量获取
+            base_url: OpenAI API的基础URL，如果为None则使用默认URL
+            model_name: 使用的模型名称，默认为"gpt-3.5-turbo"
+        """
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
+            raise ValueError("缺少OpenAI API密钥，请设置OPENAI_API_KEY环境变量")
+        
+        self.base_url = base_url
+        self.model_name = model_name
+        
+        # 初始化OpenAI客户端
+        if self.base_url:
+            self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        else:
+            self.client = OpenAI(api_key=self.api_key)
+        
+        self.task_history: List[Dict[str, Any]] = []  # 任务历史记录
+    
+    def _get_current_timestamp(self) -> str:
+        """
+        获取当前时间戳
+        
+        Returns:
+            ISO格式的时间戳字符串
+        """
+        from datetime import datetime
+        return datetime.now().isoformat()
+    
+    def decompose_task(self, raw_requirement: str) -> List[SubTask]:
+        """
+        请求大模型进行任务分解
+        
+        Args:
+            raw_requirement: 原始需求（自然语言描述）
+            
+        Returns:
+            结构化任务清单
+        """
+        try:
+            # 构造提示词
+            prompt = f"""
+            请将以下原始需求分解为具体的子任务，并以JSON格式返回结果。
+            
+            原始需求:
+            {raw_requirement}
+            
+            请按照以下格式返回结果:
+            {{
+                "tasks": [
+                    {{
+                        "id": "task_1",
+                        "description": "子任务描述",
+                        "type": "tool_operation 或 ai_generation",
+                        "context": {{}}
+                    }}
+                ]
+            }}
+            
+            其中type字段只能是"tool_operation"或"ai_generation"。
+            """
+
+            # 调用OpenAI API
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {"role": "system", "content": "你是一个任务分解专家，能够将复杂需求分解为具体的可执行子任务。"},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=1000
+            )
+
+            # 解析响应
+            content = response.choices[0].message.content
+            # 提取JSON部分
+            import re
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                task_data = json.loads(json_match.group())
+                subtasks = []
+                for task_info in task_data.get("tasks", []):
+                    task_type = TaskType(task_info["type"])
+                    subtask = SubTask(
+                        id=task_info["id"],
+                        description=task_info["description"],
+                        task_type=task_type,
+                        context=task_info.get("context", {})
+                    )
+                    subtasks.append(subtask)
+                return subtasks
+            else:
+                raise ValueError("无法从响应中提取有效的JSON数据")
+
+        except Exception as e:
+            raise Exception(f"任务分解失败: {str(e)}")
+    
+    def execute_subtask(self, subtask: SubTask) -> Dict[str, Any]:
+        """
+        执行单个子任务
+        
+        Args:
+            subtask: 子任务对象
+            
+        Returns:
+            任务执行结果
+        """
+        if subtask.task_type == TaskType.TOOL_OPERATION:
+            return self._execute_tool_operation(subtask)
+        elif subtask.task_type == TaskType.AI_GENERATION:
+            return self._execute_ai_generation(subtask)
+        else:
+            raise ValueError(f"未知的任务类型: {subtask.task_type}")
+    
+    def _execute_tool_operation(self, subtask: SubTask) -> Dict[str, Any]:
+        """
+        执行工具操作
+        
+        Args:
+            subtask: 工具操作任务
+            
+        Returns:
+            工具操作结果
+        """
+        try:
+            # 构造提示词，请求生成MCP格式的工具指令
+            prompt = f"""
+            根据以下子任务信息，生成MCP格式的工具指令：
+            
+            任务ID: {subtask.id}
+            任务描述: {subtask.description}
+            任务上下文: {json.dumps(subtask.context, ensure_ascii=False, indent=2)}
+            
+            请生成一个MCP协议格式的工具调用指令，用于执行此任务。
+            返回格式为JSON，包含以下字段：
+            - method: 工具方法名
+            - params: 参数字典
+            - expected_result: 预期结果格式描述
+            """
+
+            # 调用OpenAI API生成工具指令
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {"role": "system", "content": "你是一个工具调用专家，能够根据任务需求生成MCP协议格式的工具调用指令。"},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=500
+            )
+
+            # 解析响应
+            content = response.choices[0].message.content
+            # 提取JSON部分
+            import re
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                tool_instruction = json.loads(json_match.group())
+                
+                # 模拟工具执行（在实际应用中，这里会调用真实的MCP服务）
+                result = {
+                    "task_id": subtask.id,
+                    "status": "completed",
+                    "instruction": tool_instruction,
+                    "execution_result": f"工具操作 '{subtask.description}' 已执行完成",
+                    "timestamp": self._get_current_timestamp()
+                }
+                return result
+            else:
+                raise ValueError("无法从响应中提取有效的工具指令JSON数据")
+
+        except Exception as e:
+            return {
+                "task_id": subtask.id,
+                "status": "failed",
+                "error": str(e),
+                "timestamp": self._get_current_timestamp()
+            }
+    
+    def _execute_ai_generation(self, subtask: SubTask) -> Dict[str, Any]:
+        """
+        执行AI生成任务
+        
+        Args:
+            subtask: AI生成任务
+            
+        Returns:
+            AI生成结果
+        """
+        try:
+            # 构造提示词，请求AI生成内容
+            prompt = f"""
+            根据以下子任务信息，生成相应的内容：
+            
+            任务ID: {subtask.id}
+            任务描述: {subtask.description}
+            任务上下文: {json.dumps(subtask.context, ensure_ascii=False, indent=2)}
+            
+            请根据任务描述生成相应的内容。可以是代码、文档、设计方案等任何形式的内容。
+            请以清晰、结构化的方式返回生成结果。
+            """
+
+            # 调用OpenAI API生成内容
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {"role": "system", "content": "你是一个内容生成专家，能够根据任务需求生成高质量的内容，包括但不限于代码、文档、设计方案等。"},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                max_tokens=1500
+            )
+
+            # 解析响应
+            generated_content = response.choices[0].message.content
+            
+            result = {
+                "task_id": subtask.id,
+                "status": "completed",
+                "content": generated_content,
+                "content_type": "text",
+                "timestamp": self._get_current_timestamp()
+            }
+            return result
+
+        except Exception as e:
+            return {
+                "task_id": subtask.id,
+                "status": "failed",
+                "error": str(e),
+                "timestamp": self._get_current_timestamp()
+            }
+    
+    def validate_result(self, result: Dict[str, Any], context: Dict[str, Any]) -> ValidationResult:
+        """
+        请求大模型进行结果验证
+        
+        Args:
+            result: 任务执行结果
+            context: 任务上下文
+            
+        Returns:
+            验证结果
+        """
+        try:
+            # 构造提示词
+            prompt = f"""
+            请对以下任务执行结果进行验证：
+            
+            任务上下文: {json.dumps(context, ensure_ascii=False, indent=2)}
+            执行结果: {json.dumps(result, ensure_ascii=False, indent=2)}
+            
+            请评估结果的质量并提供验证报告，包括：
+            1. 结果是否符合预期
+            2. 是否存在潜在问题或风险
+            3. 改进建议（如果需要）
+            
+            请以以下JSON格式返回验证结果：
+            {{
+                "is_valid": true/false,
+                "feedback": "验证反馈",
+                "suggestions": ["改进建议1", "改进建议2"]
+            }}
+            """
+
+            # 调用OpenAI API进行结果验证
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=[
+                    {"role": "system", "content": "你是一个质量评估专家，能够对任务执行结果进行专业评估和验证。"},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=800
+            )
+
+            # 解析响应
+            content = response.choices[0].message.content
+            # 提取JSON部分
+            import re
+            json_match = re.search(r'\{.*\}', content, re.DOTALL)
+            if json_match:
+                validation_data = json.loads(json_match.group())
+                return ValidationResult(
+                    is_valid=validation_data.get("is_valid", False),
+                    feedback=validation_data.get("feedback", ""),
+                    suggestions=validation_data.get("suggestions", [])
+                )
+            else:
+                # 如果无法解析JSON，返回默认的验证结果
+                return ValidationResult(
+                    is_valid=True,
+                    feedback="无法解析详细的验证反馈",
+                    suggestions=[]
+                )
+
+        except Exception as e:
+            # 如果验证过程出错，仍然返回一个验证结果
+            return ValidationResult(
+                is_valid=False,
+                feedback=f"验证过程出错: {str(e)}",
+                suggestions=["请检查验证逻辑"]
+            )
+    
+    def run(self, raw_requirement: str) -> Dict[str, Any]:
+        """
+        运行完整的Agent流程
+        
+        Args:
+            raw_requirement: 原始需求
+            
+        Returns:
+            最终交付结果
+        """
+        # 1. 任务分解
+        subtasks = self.decompose_task(raw_requirement)
+        
+        # 2. 请求用户确认子任务
+        confirmed_subtasks = self._confirm_subtasks(subtasks)
+        
+        # 3. 任务执行循环
+        results = []
+        for subtask in confirmed_subtasks:
+            # 执行子任务
+            result = self.execute_subtask(subtask)
+            results.append(result)
+            
+            # 更新任务历史
+            self.task_history.append({
+                "task_id": subtask.id,
+                "result": result
+            })
+            
+            # 结果验证
+            validation = self.validate_result(result, subtask.context)
+            if not validation.is_valid:
+                print(f"任务 {subtask.id} 验证失败: {validation.feedback}")
+                if validation.suggestions:
+                    print("改进建议:")
+                    for suggestion in validation.suggestions:
+                        print(f"  - {suggestion}")
+                # 在实际应用中，这里可能需要重新执行任务或请求用户干预
+        
+        # 4. 返回最终结果
+        return {
+            "status": "completed",
+            "subtasks": confirmed_subtasks,
+            "results": results,
+            "task_history": self.task_history
+        }
+    
+    def _confirm_subtasks(self, subtasks: List[SubTask]) -> List[SubTask]:
+        """
+        请求用户确认子任务（模拟实现）
+        
+        Args:
+            subtasks: 子任务列表
+            
+        Returns:
+            用户确认的子任务列表
+        """
+        # 在实际实现中，这里应该与用户交互
+        # 目前我们假设用户确认所有任务
+        print("以下子任务需要确认:")
+        for i, task in enumerate(subtasks):
+            print(f"{i+1}. {task.description}")
+        print("默认确认所有任务。")
+        return subtasks
+
+
+def main():
+    """主函数"""
+    # 获取原始需求
+    raw_requirement = input("请输入您的需求: ")
+    
+    # 获取可选的base_url和model_name
+    base_url_input = input("请输入base_url (可选，直接回车使用默认值): ").strip()
+    model_name_input = input("请输入model_name (可选，直接回车使用默认值): ").strip()
+    
+    # 处理用户输入
+    base_url = base_url_input if base_url_input else None
+    model_name = model_name_input if model_name_input else "gpt-3.5-turbo"
+    
+    # 创建Agent实例
+    try:
+        agent = Agent(base_url=base_url, model_name=model_name)
+        
+        # 运行Agent流程
+        result = agent.run(raw_requirement)
+        
+        # 输出结果
+        print("任务完成!")
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        
+    except Exception as e:
+        print(f"执行过程中出现错误: {e}")
+
+
+if __name__ == "__main__":
+    main()

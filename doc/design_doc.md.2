@@ -1,0 +1,312 @@
+# AI Agent Flow 详细设计文档
+
+## 1. 概述
+
+本文档详细描述了AI Agent Flow系统的架构设计和实现细节。该系统根据需求文档中的流程图实现了一个完整的AI Agent工作流程，能够将自然语言需求分解为可执行的子任务，并通过与大模型和工具集的交互来完成任务执行和结果验证。
+
+## 2. 系统架构
+
+### 2.1 整体架构
+
+系统采用模块化设计，主要包括以下组件：
+
+1. **Agent执行体**: 核心控制组件，负责协调整个工作流程
+2. **大模型接口**: 与OpenAI API交互，实现任务分解、内容生成和结果验证
+3. **任务管理模块**: 管理任务分解、执行和验证的整个生命周期
+4. **工具操作模块**: 处理需要工具执行的任务
+5. **AI生成模块**: 处理需要AI内容生成的任务
+
+### 2.2 工作流程
+
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant Agent as Agent执行体
+    participant MCPService as MCP服务
+    participant Tools as 工具集
+    participant LLM as 大模型
+
+    Note over User,LLM: I驱动的工程实现闭环
+
+    %% 初始需求提交
+    User->>Agent: 原始需求<br>（自然语言描述）
+    activate Agent
+
+    %% 大模型任务分解
+    Agent->>LLM: 请求任务分解<br>（需求原文）
+    activate LLM
+    LLM->>LLM: 需求分析→任务拆解
+    LLM-->>Agent: 结构化任务清单<br>（JSON格式）
+    deactivate LLM
+
+    Agent->>User: 请求子任务确认
+    activate User
+    User->>User: 子任务重组
+    User->>Agent: 确认子任务
+    deactivate User
+
+    %% 任务执行循环
+    loop 每个子任务
+        alt 需要工具操作
+            %% 大模型生成工具指令
+            Agent-->>LLM: 提交任务上下文<br>（含历史结果）
+            activate LLM
+            LLM->>LLM: 生成工具调用指令
+            LLM-->>Agent: Protocol指令<br>（MCP格式）
+            deactivate LLM
+
+            %% 执行工具操作
+            Agent->>MCPService: 发送Protocol指令
+            activate MCPService
+            MCPService->>Tools: 执行具体操作
+            activate Tools
+            Tools-->>MCPService: 操作结果
+            deactivate Tools
+            MCPService-->>Agent: 结构化结果
+            deactivate MCPService
+
+        else 需要AI生成
+            %% 大模型生成内容
+            Agent->>LLM: 请求内容生成<br>（设计/代码）
+            activate LLM
+            LLM->>LLM: 基于Context生成<br>(这里的Context可以是上一个子任务的结果)
+            LLM-->>Agent: 生成结果<br>（文档/代码）
+            Agent-->>Agent: a
+            deactivate LLM
+        end
+
+        %% 结果验证
+        Agent->>LLM: 请求结果验证
+        activate LLM
+        LLM->>LLM: 质量评估+风险检测
+        LLM-->>Agent: 验证报告<br>（通过/需修改）
+        deactivate LLM
+    end
+
+    %% 最终交付
+```
+
+## 3. 核心类设计
+
+### 3.1 Agent类
+
+`Agent`类是系统的核心组件，负责协调整个工作流程。
+
+#### 3.1.1 类定义
+
+```python
+class Agent:
+    def __init__(self, api_key: Optional[str] = None):
+        pass
+    
+    def decompose_task(self, raw_requirement: str) -> List[SubTask]:
+        pass
+    
+    def execute_subtask(self, subtask: SubTask) -> Dict[str, Any]:
+        pass
+    
+    def validate_result(self, result: Dict[str, Any], context: Dict[str, Any]) -> ValidationResult:
+        pass
+    
+    def run(self, raw_requirement: str) -> Dict[str, Any]:
+        pass
+```
+
+#### 3.1.2 主要方法
+
+1. **`__init__(self, api_key: Optional[str] = None)`**: 初始化Agent实例
+   - 参数: `api_key` - OpenAI API密钥
+   - 功能: 初始化OpenAI客户端，设置API密钥
+
+2. **`decompose_task(self, raw_requirement: str) -> List[SubTask]`**: 任务分解
+   - 参数: `raw_requirement` - 原始需求（自然语言描述）
+   - 返回: 结构化任务清单
+   - 功能: 调用大模型将自然语言需求分解为可执行的子任务
+
+3. **`execute_subtask(self, subtask: SubTask) -> Dict[str, Any]`**: 执行子任务
+   - 参数: `subtask` - 子任务对象
+   - 返回: 任务执行结果
+   - 功能: 根据任务类型调用相应的执行方法
+
+4. **`validate_result(self, result: Dict[str, Any], context: Dict[str, Any]) -> ValidationResult`**: 结果验证
+   - 参数: 
+     - `result` - 任务执行结果
+     - `context` - 任务上下文
+   - 返回: 验证结果
+   - 功能: 调用大模型对任务执行结果进行验证
+
+5. **`run(self, raw_requirement: str) -> Dict[str, Any]`**: 运行完整流程
+   - 参数: `raw_requirement` - 原始需求
+   - 返回: 最终交付结果
+   - 功能: 执行完整的Agent工作流程
+
+### 3.2 数据结构
+
+#### 3.2.1 SubTask类
+
+```python
+@dataclass
+class SubTask:
+    id: str
+    description: str
+    task_type: TaskType
+    context: Dict[str, Any]
+    status: str = "pending"
+```
+
+#### 3.2.2 TaskType枚举
+
+```python
+class TaskType(Enum):
+    TOOL_OPERATION = "tool_operation"  # 需要工具操作
+    AI_GENERATION = "ai_generation"   # 需要AI生成
+```
+
+#### 3.2.3 ValidationResult类
+
+```python
+@dataclass
+class ValidationResult:
+    is_valid: bool
+    feedback: str
+    suggestions: List[str]
+```
+
+## 4. 功能模块详细设计
+
+### 4.1 与OpenAI API的集成
+
+系统通过`openai` Python库与OpenAI API进行交互。在Agent初始化时创建OpenAI客户端实例，并在需要时调用相应的API方法。
+
+#### 4.1.1 API调用设计
+
+1. **任务分解API调用**
+   - 模型: `gpt-3.5-turbo`
+   - 角色: 系统角色为"任务分解专家"
+   - 温度: 0.3（较低温度以获得更一致的结果）
+   - 最大令牌数: 1000
+
+2. **工具操作API调用**
+   - 模型: `gpt-3.5-turbo`
+   - 角色: 系统角色为"工具调用专家"
+   - 温度: 0.3
+   - 最大令牌数: 500
+
+3. **AI生成API调用**
+   - 模型: `gpt-3.5-turbo`
+   - 角色: 系统角色为"内容生成专家"
+   - 温度: 0.7（较高温度以获得更有创意的结果）
+   - 最大令牌数: 1500
+
+4. **结果验证API调用**
+   - 模型: `gpt-3.5-turbo`
+   - 角色: 系统角色为"质量评估专家"
+   - 温度: 0.3
+   - 最大令牌数: 800
+
+### 4.2 任务分解模块
+
+任务分解模块负责将自然语言需求转换为结构化的子任务列表。
+
+#### 4.2.1 输入处理
+
+- 接收原始需求文本
+- 构造提示词，明确要求返回JSON格式的任务列表
+
+#### 4.2.2 输出格式
+
+```json
+{
+    "tasks": [
+        {
+            "id": "task_1",
+            "description": "子任务描述",
+            "type": "tool_operation 或 ai_generation",
+            "context": {}
+        }
+    ]
+}
+```
+
+### 4.3 任务执行模块
+
+任务执行模块根据任务类型调用相应的执行方法。
+
+#### 4.3.1 工具操作执行
+
+1. 调用大模型生成MCP格式的工具指令
+2. 模拟工具执行（在实际应用中会调用真实的MCP服务）
+3. 返回执行结果
+
+#### 4.3.2 AI生成执行
+
+1. 调用大模型生成相应内容
+2. 支持生成代码、文档、设计方案等多种内容
+3. 返回生成结果
+
+### 4.4 结果验证模块
+
+结果验证模块负责对任务执行结果进行质量评估。
+
+#### 4.4.1 验证流程
+
+1. 构造验证提示词，包含任务上下文和执行结果
+2. 调用大模型进行质量评估
+3. 返回结构化的验证报告
+
+#### 4.4.2 输出格式
+
+```json
+{
+    "is_valid": true/false,
+    "feedback": "验证反馈",
+    "suggestions": ["改进建议1", "改进建议2"]
+}
+```
+
+## 5. 错误处理
+
+系统实现了全面的错误处理机制：
+
+1. **API调用错误**: 捕获OpenAI API调用异常，返回详细的错误信息
+2. **JSON解析错误**: 处理大模型返回的JSON格式错误
+3. **验证失败**: 处理任务验证失败的情况，提供改进建议
+4. **通用异常**: 捕获其他未预期的异常，确保系统稳定性
+
+## 6. 使用说明
+
+### 6.1 环境配置
+
+1. 安装依赖:
+   ```bash
+   pip install openai
+   ```
+
+2. 设置OpenAI API密钥:
+   ```bash
+   export OPENAI_API_KEY="your-api-key"
+   ```
+
+### 6.2 运行方式
+
+1. 直接运行:
+   ```bash
+   python agent_flow.py
+   ```
+
+2. 作为模块导入:
+   ```python
+   from agent_flow import Agent
+   
+   agent = Agent()
+   result = agent.run("你的需求描述")
+   ```
+
+## 7. 扩展性设计
+
+系统采用模块化设计，便于扩展：
+
+1. **新增任务类型**: 通过扩展`TaskType`枚举和相应的执行方法
+2. **集成真实工具**: 替换工具操作模块中的模拟实现
+3. **支持更多模型**: 修改API调用配置以支持其他大模型
+4. **增强验证机制**: 扩展结果验证模块以支持更复杂的验证逻辑
