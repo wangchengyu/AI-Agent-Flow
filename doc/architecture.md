@@ -57,6 +57,14 @@ sequenceDiagram
     User-->>Agent: 确认子任务
     
     loop 每个子任务
+        Agent->>LLM: 请求是否需要额外信息
+        LLM-->>Agent: 返回推理结果
+        
+        alt 需要额外信息
+            Agent->>User: 请求额外信息
+            User-->>Agent: 提供额外信息
+        end
+        
         Agent->>LLM: 请求执行模式
         LLM-->>Agent: 返回执行模式
         

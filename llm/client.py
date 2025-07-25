@@ -174,3 +174,39 @@ class LLMClient:
         ]
         
         return self.chat_completion(messages, temperature=0.5)
+
+    def need_additional_info(self, task_context: str, current_task: str) -> Dict[str, Any]:
+        """
+        判断是否需要额外信息以及需要哪种类型的额外信息
+        
+        Args:
+            task_context: 任务上下文
+            current_task: 当前任务
+            
+        Returns:
+            Dict[str, Any]: 推理结果，包括是否需要额外信息和信息类型
+        """
+        messages = [
+            {
+                "role": "system",
+                "content": """你是一个任务分析专家。请分析当前任务是否需要额外信息才能完成。
+                如果需要，请指定需要的信息类型：
+                1. natural_language: 用户用自然语言补充的信息
+                2. user_data: 用户提交的数据或其他信息
+                3. folder_content: 请求当前文件夹的所有文件
+                4. open_file: 请求打开某个文件
+                
+                返回JSON格式的结果，包含以下字段：
+                - need_info: boolean, 是否需要额外信息
+                - info_type: string, 信息类型（如果need_info为true）
+                - reason: string, 需要额外信息的原因
+                - question: string, 向用户提出的问题（如果需要）
+                """
+            },
+            {
+                "role": "user",
+                "content": f"任务上下文：\n{task_context}\n\n当前任务：\n{current_task}\n\n请分析是否需要额外信息。"
+            }
+        ]
+        
+        return self.chat_completion(messages, temperature=0.3)

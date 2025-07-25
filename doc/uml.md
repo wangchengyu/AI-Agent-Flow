@@ -31,6 +31,7 @@ classDiagram
         +content_generation(context: str, task: str) Dict[str, Any]
         +result_validation(result: str, requirement: str) Dict[str, Any]
         +result_integration(results: List[str]) Dict[str, Any]
+        +need_additional_info(task_context: str, current_task: str) Dict[str, Any]
     }
     
     class AgentManager {
@@ -137,6 +138,14 @@ sequenceDiagram
     AgentManager-->>CLI: 返回Task
     
     loop 每个任务
+        CLI->>LLMClient: need_additional_info(任务上下文, 当前任务)
+        LLMClient-->>CLI: 返回推理结果
+        
+        alt 需要额外信息
+            CLI->>User: 请求额外信息(信息类型)
+            User-->>CLI: 提供额外信息
+        end
+        
         CLI->>TaskExecutor: execute_task(任务类型, 数据)
         
         alt 工具任务
@@ -251,16 +260,21 @@ flowchart TD
     C --> D[创建Agent和任务]
     D --> E[执行任务]
     
-    E --> F{任务类型}
-    F -->|工具操作| G[调用MCP工具]
-    F -->|AI生成| H[调用大模型生成]
+    E --> F[推理是否需要额外信息]
+    F -->|需要| G[与用户交互获取额外信息]
+    G --> H[执行任务]
+    F -->|不需要| H
     
-    G --> I[保存结果到数据库]
-    H --> I
+    H --> I{任务类型}
+    I -->|工具操作| J[调用MCP工具]
+    I -->|AI生成| K[调用大模型生成]
     
-    I --> J{是否还有任务}
-    J -->|是| E
-    J -->|否| K[整合结果]
+    J --> L[保存结果到数据库]
+    K --> L
     
-    K --> L[返回给用户]
-    L --> M[结束]
+    L --> M{是否还有任务}
+    M -->|是| E
+    M -->|否| N[整合结果]
+    
+    N --> O[返回给用户]
+    O --> P[结束]

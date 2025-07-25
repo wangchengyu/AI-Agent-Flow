@@ -120,6 +120,60 @@ class CLIInterface:
         
         return "\n".join(lines)
 
+    def _get_additional_info(self, info_type: str, question: str) -> Dict[str, Any]:
+        """获取额外信息"""
+        print(f"\n需要额外信息: {question}")
+        
+        if info_type == "natural_language":
+            print("请输入您的补充信息:")
+            lines = []
+            try:
+                while True:
+                    line = input()
+                    lines.append(line)
+            except EOFError:
+                pass
+            return {"type": "natural_language", "content": "\n".join(lines)}
+        
+        elif info_type == "user_data":
+            print("请提供相关数据或其他信息:")
+            lines = []
+            try:
+                while True:
+                    line = input()
+                    lines.append(line)
+            except EOFError:
+                pass
+            return {"type": "user_data", "content": "\n".join(lines)}
+        
+        elif info_type == "folder_content":
+            # 请求文件夹内容
+            result = self.mcp_service.execute_tool("list_files", {"directory": "."})
+            if result["success"]:
+                files = result["result"]["files"]
+                print("当前文件夹内容:")
+                for file in files:
+                    print(f"  {file['name']} ({'目录' if file['is_directory'] else '文件'})")
+                return {"type": "folder_content", "content": files}
+            else:
+                print(f"获取文件夹内容失败: {result['error']}")
+                return {"type": "folder_content", "content": [], "error": result["error"]}
+        
+        elif info_type == "open_file":
+            print("请输入要打开的文件路径:")
+            file_path = input().strip()
+            result = self.mcp_service.execute_tool("read_file", {"file_path": file_path})
+            if result["success"]:
+                print(f"文件内容:\n{result['result']['content']}")
+                return {"type": "open_file", "content": result["result"]["content"], "file_path": file_path}
+            else:
+                print(f"读取文件失败: {result['error']}")
+                return {"type": "open_file", "content": "", "file_path": file_path, "error": result["error"]}
+        
+        else:
+            print("未知的信息类型")
+            return {"type": "unknown", "content": ""}
+
     def _process_requirement(self, requirement: str):
         """处理用户需求"""
         print(f"正在处理需求: {requirement[:50]}...")
@@ -147,27 +201,122 @@ class CLIInterface:
             backstory="一个经验丰富的AI助手，能够处理各种任务"
         )
         
-        # 3. 执行任务
+        # 3. 执行任务（带推理和额外信息获取）
         print("正在执行任务...")
-        # 这里应该根据分解的任务列表逐个执行
-        # 为简化示例，我们直接生成结果
+        # 解析任务分解结果
+        try:
+            tasks = json.loads(decomposition_result["content"])
+        except json.JSONDecodeError:
+            print("任务分解结果不是有效的JSON格式，使用默认任务")
+            tasks = [{"description": "根据需求生成完整的解决方案", "type": "content_generation"}]
         
-        # 4. 结果生成
-        print("正在生成结果...")
-        generation_result = self.llm_client.content_generation(
-            context=requirement,
-            task="根据需求生成完整的解决方案"
-        )
+        # 任务执行结果列表
+        task_results = []
         
-        if not generation_result["success"]:
-            print(f"结果生成失败: {generation_result['error']}")
+        # 推理循环计数器
+        inference_count = 0
+        max_inference_count = 5
+        
+        # 执行每个任务
+        for i, task in enumerate(tasks):
+            # 检查推理循环次数
+            if inference_count >= max_inference_count:
+                print(f"已达到最大推理循环次数({max_inference_count})，跳过剩余任务")
+                break
+            
+            task_description = task.get("description", "未指定任务描述")
+            task_type = task.get("type", "content_generation")
+            
+            print(f"\n执行任务 {i+1}/{len(tasks)}: {task_description}")
+            
+            # 循环推理和获取额外信息，直到不需要额外信息或达到最大循环次数
+            while inference_count < max_inference_count:
+                # 构建任务上下文
+                task_context = f"原始需求: {requirement}\n\n已完成的任务结果:\n"
+                for j, result in enumerate(task_results):
+                    task_context += f"{j+1}. {result.get('task', '未知任务')}: {result.get('result', '无结果')}\n"
+                
+                # 调用大模型推理是否需要额外信息
+                print("正在推理是否需要额外信息...")
+                inference_result = self.llm_client.need_additional_info(task_context, task_description)
+                
+                if not inference_result["success"]:
+                    print(f"推理失败: {inference_result['error']}")
+                    break
+                
+                inference_count += 1
+                
+                # 解析推理结果
+                try:
+                    inference_data = json.loads(inference_result["content"])
+                except json.JSONDecodeError:
+                    print("推理结果不是有效的JSON格式")
+                    print(f"推理结果内容: {inference_result['content']}")
+                    break
+                
+                # 检查是否需要额外信息
+                if inference_data.get("need_info", False):
+                    info_type = inference_data.get("info_type", "")
+                    reason = inference_data.get("reason", "")
+                    question = inference_data.get("question", "请提供相关信息")
+                    
+                    print(f"需要额外信息 ({info_type}): {reason}")
+                    
+                    # 获取额外信息
+                    additional_info = self._get_additional_info(info_type, question)
+                    
+                    # 将额外信息添加到任务上下文中
+                    task_context += f"\n用户提供的额外信息 ({additional_info['type']}):\n{additional_info['content']}\n"
+                    
+                    # 继续循环，再次推理
+                    continue
+                else:
+                    print("不需要额外信息，继续执行任务")
+                    break
+            
+            # 执行任务
+            if task_type == "content_generation":
+                generation_result = self.llm_client.content_generation(
+                    context=task_context,
+                    task=task_description
+                )
+                
+                if not generation_result["success"]:
+                    print(f"任务执行失败: {generation_result['error']}")
+                    task_results.append({
+                        "task": task_description,
+                        "result": f"执行失败: {generation_result['error']}",
+                        "status": "error"
+                    })
+                else:
+                    print("任务执行完成")
+                    task_results.append({
+                        "task": task_description,
+                        "result": generation_result["content"],
+                        "status": "success"
+                    })
+            else:
+                # 其他类型的任务，这里简化处理
+                print(f"执行任务类型: {task_type}")
+                task_results.append({
+                    "task": task_description,
+                    "result": f"执行了 {task_type} 类型的任务",
+                    "status": "success"
+                })
+        
+        # 4. 结果整合
+        print("正在整合结果...")
+        integration_result = self.llm_client.result_integration([result["result"] for result in task_results])
+        
+        if not integration_result["success"]:
+            print(f"结果整合失败: {integration_result['error']}")
             return
         
-        print("结果生成完成")
+        print("结果整合完成")
         
         # 5. 结果展示
         print("\n=== 解决方案 ===")
-        print(generation_result["content"])
+        print(integration_result["content"])
         print("================\n")
 
     def run(self):
