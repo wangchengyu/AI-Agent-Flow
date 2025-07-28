@@ -1,0 +1,31 @@
+# AI Agent Flow - System Architecture
+
+```mermaid
+graph TD
+    A[User Interface] --> B[CLI Interface]
+    B --> C{Main Controller}
+    
+    C --> D[Agent Manager]
+    C --> E[MCP Tools Manager]
+    C --> F[LLM Interface]
+    C --> G[Data Manager]
+    
+    D --> H[CrewAI Agents]
+    D --> I[Task Management]
+    
+    E --> J[File Management Tools]
+    E --> K[Tool Execution Engine]
+    
+    F --> L[OpenAI Compatible API]
+    F --> M[Task Analysis]
+    F --> N[Code Generation]
+    F --> O[Result Validation]
+    
+    G --> P[SQLite3 Database]
+    G --> Q[Task History]
+    G --> R[File Metadata]
+    
+    P --> S[Disk Storage]
+    
+    classDef component fill:#f9f9f9,stroke:#333;
+    class A,B,C,D,E,F,G component;
