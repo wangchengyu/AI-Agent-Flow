@@ -1,0 +1,41 @@
+graph TD
+    A[用户界面] --> B[CLI模块]
+    B --> C{命令解析}
+    C -->|Agent管理| D[Agent管理模块]
+    C -->|任务管理| E[任务管理模块]
+    C -->|文件操作| F[MCP工具模块]
+    C -->|LLM交互| G[大模型接口模块]
+    
+    D --> H[数据库模块]
+    E --> H
+    F --> H
+    G --> H
+    
+    D --> I[CrewAI框架]
+    F --> J[FileManager工具]
+    G --> K[OpenAI API]
+    
+    H --> L[SQLite3数据库]
+    
+    style A fill:#FFE4B5,stroke:#333
+    style B fill:#98FB98,stroke:#333
+    style C fill:#87CEEB,stroke:#333
+    style D fill:#FFB6C1,stroke:#333
+    style E fill:#FFB6C1,stroke:#333
+    style F fill:#FFB6C1,stroke:#333
+    style G fill:#FFB6C1,stroke:#333
+    style H fill:#DDA0DD,stroke:#333
+    style I fill:#87CEEB,stroke:#333
+    style J fill:#87CEEB,stroke:#333
+    style K fill:#87CEEB,stroke:#333
+    style L fill:#DB7093,stroke:#333
+    
+    classDef module fill:#FFB6C1,stroke:#333;
+    classDef interface fill:#87CEEB,stroke:#333;
+    classDef component fill:#FFE4B5,stroke:#333;
+    classDef database fill:#DB7093,stroke:#333;
+    
+    class D,E,F,G module
+    class I,J,K interface
+    class A component
+    class L database
