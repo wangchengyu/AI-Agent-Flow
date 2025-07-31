@@ -1,7 +1,6 @@
-# 系统架构图
+# 系统架构图更新
 
-## 1. 整体架构
-
+## 1. 更新后的整体架构
 ```mermaid
 graph TD
     A[用户] --> B[命令行交互界面]
@@ -10,6 +9,8 @@ graph TD
     C --> E[MCP服务层]
     C --> F[数据管理层]
     E --> G[工具集层]
+    D --> H[结果验证服务]
+    F --> I[持久化存储]
     
     subgraph 用户接口层
         A
@@ -22,23 +23,21 @@ graph TD
     
     subgraph 大模型接口层
         D
+        H
     end
     
     subgraph MCP服务层
         E
+        G
     end
     
     subgraph 数据管理层
         F
-    end
-    
-    subgraph 工具集层
-        G
+        I
     end
 ```
 
-## 2. 模块间交互关系
-
+## 2. 更新的模块交互关系
 ```mermaid
 sequenceDiagram
     participant User as 用户
@@ -48,6 +47,7 @@ sequenceDiagram
     participant MCP as MCP服务
     participant Data as 数据管理
     participant Tools as 工具集
+    participant Validator as 结果验证
     
     User->>CLI: 输入需求
     CLI->>Agent: 传递需求
@@ -63,6 +63,7 @@ sequenceDiagram
         alt 需要额外信息
             Agent->>User: 请求额外信息
             User-->>Agent: 提供额外信息
+            Agent->>Data: 保存上下文状态
         end
         
         Agent->>LLM: 请求执行模式
@@ -81,6 +82,9 @@ sequenceDiagram
         Agent->>Data: 保存执行结果
         Data-->>Agent: 确认保存
         
+        Agent->>Validator: 请求结果验证
+        Validator-->>Agent: 返回验证报告
+        
         Agent->>User: 返回子任务结果
         User-->>Agent: 确认结果
     end
@@ -90,8 +94,56 @@ sequenceDiagram
     Agent->>User: 交付完整解决方案
 ```
 
-## 3. 数据流图
+## 3. 更新的类图
+```mermaid
+classDiagram
+    class AgentManager {
+        +create_agent(config: Dict) : Agent
+        +assign_task(agent_id: str, task: Task) : bool
+        +monitor_progress(agent_id: str) : ProgressStatus
+    }
+    
+    class MCPService {
+        +register_tool(name: str, func: Callable)
+        +execute_tool(name: str, params: Dict) : Result
+        +handle_request(request: str) : Response
+    }
+    
+    class LLMClient {
+        +chat_completion(messages: List[Dict]) : str
+        +decompose_task(task: str) : List[SubTask]
+    }
+    
+    class DatabaseManager {
+        +connect() : Connection
+        +backup(path: str) : bool
+    }
+    
+    class TaskDAO {
+        +create_task(task: Task) : bool
+        +get_task(task_id: str) : Task
+    }
+    
+    class CLIInterface {
+        +start_interactive() : None
+        +handle_command(command: str) : Response
+    }
+    
+    class SessionManager {
+        +create_session() : SessionID
+        +get_context(session_id: str) : Context
+    }
+    
+    AgentManager --> MCPService : 使用
+    AgentManager --> LLMClient : 使用
+    LLMClient --> Validator : 使用
+    DatabaseManager --> TaskDAO : 包含
+    DatabaseManager --> ResultDAO : 包含
+    CLIInterface --> SessionManager : 使用
+    CLIInterface --> AgentManager : 交互
+```
 
+## 4. 更新的数据流图
 ```mermaid
 graph LR
     A[用户需求] --> B[任务分解]
@@ -134,85 +186,6 @@ graph LR
         L
         M
     end
-```
-
-## 4. 各模块详细架构
-
-### 4.1 命令行交互界面
-
-```mermaid
-graph TD
-    A[CLI主类] --> B[参数解析]
-    A --> C[配置加载]
-    A --> D[需求处理]
-    A --> E[结果展示]
     
-    D --> F[任务分解请求]
-    D --> G[任务执行]
-    D --> H[结果生成]
-    
-    G --> I[Agent管理器]
-    G --> J[任务执行器]
-    G --> K[MCP服务]
-    G --> L[数据库管理]
-```
-
-### 4.2 Agent执行层
-
-```mermaid
-graph TD
-    A[Agent管理器] --> B[Agent创建]
-    A --> C[任务创建]
-    A --> D[任务调度]
-    A --> E[Crew管理]
-    
-    F[任务执行器] --> G[任务注册]
-    F --> H[任务执行]
-    F --> I[结果处理]
-```
-
-### 4.3 大模型接口层
-
-```mermaid
-graph TD
-    A[LLM客户端] --> B[配置管理]
-    A --> C[聊天完成]
-    A --> D[任务分解]
-    A --> E[内容生成]
-    A --> F[结果验证]
-    A --> G[结果整合]
-```
-
-### 4.4 MCP服务层
-
-```mermaid
-graph TD
-    A[MCP服务] --> B[工具注册]
-    A --> C[工具执行]
-    A --> D[协议处理]
-    A --> E[请求处理]
-    
-    B --> F[文件管理工具]
-    B --> G[其他工具]
-```
-
-### 4.5 数据管理层
-
-```mermaid
-graph TD
-    A[数据库管理器] --> B[连接管理]
-    A --> C[任务管理]
-    A --> D[结果管理]
-    A --> E[配置管理]
-    
-    C --> F[任务创建]
-    C --> G[任务查询]
-    C --> H[任务更新]
-    
-    D --> I[结果保存]
-    D --> J[结果查询]
-    D --> K[结果更新]
-    
-    E --> L[配置设置]
-    E --> M[配置查询]
-    E --> N[配置删除]
+    DataFlow[持久化存储] -->|读写| Processing
+    Processing -->|状态更新| DataFlow

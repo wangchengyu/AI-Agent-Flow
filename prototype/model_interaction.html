@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>模型交互页面</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <h2>导航菜单</h2>
+            <ul>
+                <li><a href="#">提示词模板配置</a></li>
+                <li><a href="#">模型配置</a></li>
+                <li><a href="#">项目操作</a></li>
+                <li><a href="#">项目创建</a></li>
+                <li><a href="#">模型交互</a></li>
+            </ul>
+        </aside>
+        <main class="content">
+            <header>
+                <h1>模型交互</h1>
+                <div class="user-info">
+                    <span>欢迎，用户</span>
+                    <button>登出</button>
+                </div>
+            </header>
+            <div class="interaction-container">
+                <div class="left-panel">
+                    <h3>项目文件树</h3>
+                    <ul>
+                        <li>文件1</li>
+                        <li>文件2</li>
+                        <li>文件3</li>
+                    </ul>
+                </div>
+                <div class="center-panel">
+                    <h3>文件预览/编辑</h3>
+                    <div class="code-editor">
+                        <textarea placeholder="文件内容..."></textarea>
+                    </div>
+                </div>
+                <div class="right-panel">
+                    <h3>模型交互</h3>
+                    <div class="interaction-controls">
+                        <select>
+                            <option>选择模型</option>
+                            <option>GPT-3</option>
+                            <option>GPT-4</option>
+                            <option>本地模型</option>
+                        </select>
+                        <div class="context-editor">
+                            <h4>上下文编辑</h4>
+                            <textarea placeholder="输入上下文..."></textarea>
+                        </div>
+                        <div class="history">
+                            <h4>交互历史</h4>
+                            <ul>
+                                <li>历史记录1</li>
+                                <li>历史记录2</li>
+                            </ul>
+                        </div>
+                        <button>开启新会话</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</body>
+</html>
