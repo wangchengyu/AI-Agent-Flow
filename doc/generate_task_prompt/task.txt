@@ -1,0 +1,27 @@
+roocode 任务(prompt tag: 202507310134)
+调用参考需求文件为 doc/requirement/requirement.v2.md
+生成详细文档, 
+    各模块的详细设计文档位置为 doc/design/DESIGN_*.md
+    各模块的类图/序列图位置为 doc/uml/UML_*.md
+    架构图为 doc/ARCHITECTURE.md
+
+    技术实现参考代码文件夹为 ./sample/*
+
+请根据需求先计划好作业的步骤
+
+所有任务完成后, 你要转变为资深系统工程师, 对整个文档进行检查, 因为文件较多, 请逐个检查
+
+roocode 任务(prompt tag: 202507310300)
+调用参考需求文件为 doc/requirement/requirement.v2.md
+调用阅读详细文档, 
+    各模块的详细设计文档位置为 doc/design/DESIGN_*.md
+    各模块的类图/序列图位置为 doc/uml/UML_*.md
+    架构图为 doc/ARCHITECTURE.md
+
+    技术实现参考代码文件夹为 ./sample/*
+
+生成的代码在./src中
+各个模块要清晰明确
+
+
+请根据需求先计划好作业的步骤
