@@ -1,4 +1,5 @@
 import os
+from crewai import Agent, LLM
 from agents.agent_manager import AgentManager
 from tools.mcp_service import app as mcp_app, registry
 from database.db_manager import DatabaseManager
@@ -7,7 +8,14 @@ import threading
 import uvicorn
 
 # 初始化LLM模型（简化实现）
-class LLMModel:
+class LLMModel():
+    def __init__(self):
+        self.llm = LLM(
+            model="deepseek-reasoner",
+            base_url="https://api.deepseek.com/v1",
+            api_key=os.getenv("OPENAI_API_KEY")
+        )
+
     def generate(self, prompt: str) -> str:
         """简化LLM生成"""
         # 实际项目中应集成真实LLM API
