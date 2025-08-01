@@ -1,0 +1,143 @@
+@startuml 序列图
+
+!theme plain
+
+title 智能Agent任务管理系统 - 任务执行序列图
+
+actor User as user
+participant CLIApplication as cli
+participant AgentManager as agent_manager
+participant TaskDecomposer as task_decomposer
+participant SubTaskManager as sub_task_manager
+participant InfoGatheringLoop as info_gathering_loop
+participant InfoRequirementDetector as info_requirement_detector
+participant UserInputProcessor as user_input_processor
+participant InfoIntegrationMechanism as info_integration_mechanism
+participant LoopControlLogic as loop_control_logic
+participant ValidationModule as validation_module
+participant ResultValidator as result_validator
+participant ValidationReportGenerator as report_generator
+participant UserConfirmationManager as confirmation_manager
+
+autonumber
+
+user -> cli : execute_task(task_description)
+activate cli
+
+cli -> agent_manager : execute_task(task_data)
+activate agent_manager
+
+agent_manager -> task_decomposer : decompose_task(task_id, task_description)
+activate task_decomposer
+
+task_decomposer -> task_decomposer : analyze_task(task_description)
+task_decomposer -> task_decomposer : generate_sub_tasks(task_analysis)
+task_decomposer -> agent_manager : sub_tasks
+deactivate task_decomposer
+
+agent_manager -> sub_task_manager : execute_sub_tasks(task_id)
+activate sub_task_manager
+
+sub_task_manager -> sub_task_manager : for each sub_task
+    sub_task_manager -> sub_task_manager : execute_sub_task_flow(sub_task_id)
+end
+
+sub_task_manager -> agent_manager : sub_task_results
+deactivate sub_task_manager
+
+agent_manager -> info_gathering_loop : execute_info_gathering_loop(task_id, sub_task_results)
+activate info_gathering_loop
+
+loop While should_continue_loop
+    info_gathering_loop -> loop_control_logic : check_loop_conditions(loop_state)
+    activate loop_control_logic
+    loop_control_logic --> info_gathering_loop : can_continue
+    deactivate loop_control_logic
+
+    info_gathering_loop -> info_requirement_detector : detect_info_requirements(task_id, sub_task_results)
+    activate info_requirement_detector
+    
+    info_requirement_detector -> info_requirement_detector : detect_missing_info(sub_task_results)
+    info_requirement_detector -> info_requirement_detector : assess_quality(sub_task_results)
+    info_requirement_detector -> info_requirement_detector : generate_info_requirements(task, missing_info, quality_assessment)
+    info_requirement_detector --> info_gathering_loop : info_requirements
+    deactivate info_requirement_detector
+    
+    if info_requirements is not empty then
+        info_gathering_loop -> user_input_processor : process_user_input(task_id, info_requirements)
+        activate user_input_processor
+        
+        user_input_processor -> user_input_processor : collect_user_inputs(task_id, info_requirements)
+        user_input_processor -> user_input_processor : validate_user_inputs(user_inputs)
+        user_input_processor -> user_input_processor : parse_user_inputs(validated_inputs)
+        user_input_processor -> user_input_processor : format_user_inputs(parsed_inputs)
+        user_input_processor --> info_gathering_loop : user_inputs
+        deactivate user_input_processor
+        
+        info_gathering_loop -> info_integration_mechanism : integrate_user_input(task_id, user_inputs)
+        activate info_integration_mechanism
+        
+        info_integration_mechanism -> info_integration_mechanism : map_user_inputs(user_inputs)
+        info_integration_mechanism -> info_integration_mechanism : merge_user_inputs(mapped_inputs)
+        info_integration_mechanism -> info_integration_mechanism : update_task_info(task_id, merged_inputs)
+        info_integration_mechanism -> info_integration_mechanism : update_sub_task_info(task_id, merged_inputs)
+        info_integration_mechanism --> info_gathering_loop : integrated_info
+        deactivate info_integration_mechanism
+        
+        info_gathering_loop -> info_gathering_loop : update_sub_task_results(sub_task_results, integrated_info)
+    end
+    
+    info_gathering_loop -> loop_control_logic : should_continue_loop(loop_state)
+    activate loop_control_logic
+    loop_control_logic --> info_gathering_loop : should_continue
+    deactivate loop_control_logic
+end
+
+info_gathering_loop --> agent_manager : loop_result
+deactivate info_gathering_loop
+
+agent_manager -> validation_module : validate_task_result(task_id, task_result)
+activate validation_module
+
+validation_module -> result_validator : validate_task_result(task_id, task_result)
+activate result_validator
+
+result_validator -> result_validator : validate_completeness(task_id, task_result, task)
+result_validator -> result_validator : validate_accuracy(task_id, task_result, task)
+result_validator -> result_validator : validate_relevance(task_id, task_result, task)
+result_validator -> result_validator : validate_clarity(task_id, task_result, task)
+result_validator -> result_validator : validate_timeliness(task_id, task_result, task)
+result_validator --> validation_module : validation_result
+deactivate result_validator
+
+validation_module -> report_generator : generate_validation_report(task_id, validation_result)
+activate report_generator
+
+report_generator -> report_generator : generate_detailed_report(task_id, task, task_result, validation_result)
+report_generator -> report_generator : generate_html_report(task_id, report_content)
+report_generator --> validation_module : report_path
+deactivate report_generator
+
+validation_module -> confirmation_manager : request_confirmation(task_id, "task_result", {task_result, validation_result})
+activate confirmation_manager
+
+confirmation_manager -> user : show_task_result_summary(task_result, validation_result)
+activate user
+
+user --> confirmation_manager : confirm_result(reason)
+deactivate user
+
+confirmation_manager --> validation_module : confirmation_result
+deactivate confirmation_manager
+
+validation_module --> agent_manager : validation_result
+deactivate validation_module
+
+agent_manager -> agent_manager : update_task_status(task_id, "completed")
+agent_manager --> cli : task_result
+deactivate agent_manager
+
+cli -> user : show_result(task_result)
+deactivate cli
+
+@enduml

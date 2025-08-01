@@ -1,0 +1,159 @@
+@startuml 组件交互图
+
+!theme plain
+
+title 智能Agent任务管理系统 - 组件交互图
+
+' 定义组件
+component "CLI命令行界面" as cli
+component "Agent管理器" as agent_manager
+component "任务分解器" as task_decomposer
+component "子任务管理器" as sub_task_manager
+component "信息收集循环" as info_gathering_loop
+component "验证模块" as validation_module
+component "数据库管理" as db_management
+component "RAG知识管理" as rag_management
+component "MCP工具管理" as mcp_management
+component "信息需求检测" as info_requirement_detector
+component "用户输入处理" as user_input_processor
+component "信息整合机制" as info_integration_mechanism
+component "循环控制逻辑" as loop_control_logic
+component "结果验证器" as result_validator
+component "验证报告生成器" as validation_report_generator
+component "用户确认管理器" as user_confirmation_manager
+component "SQLite数据库" as sqlite
+component "向量数据库" as vector_db
+component "LLM接口" as llm_api
+component "MCP服务器" as mcp_server
+
+' 定义接口
+interface "任务执行接口" as task_execution_interface
+interface "任务分解接口" as task_decomposition_interface
+interface "子任务管理接口" as sub_task_management_interface
+interface "信息收集接口" as info_gathering_interface
+interface "验证接口" as validation_interface
+interface "数据库访问接口" as db_access_interface
+interface "知识检索接口" as knowledge_retrieval_interface
+interface "工具调用接口" as tool_call_interface
+
+' 组件与接口的关系
+cli -up- task_execution_interface
+agent_manager -up- task_execution_interface
+
+agent_manager -down- task_decomposition_interface
+task_decomposer -up- task_decomposition_interface
+
+agent_manager -down- sub_task_management_interface
+sub_task_manager -up- sub_task_management_interface
+
+agent_manager -down- info_gathering_interface
+info_gathering_loop -up- info_gathering_interface
+
+agent_manager -down- validation_interface
+validation_module -up- validation_interface
+
+agent_manager -down- db_access_interface
+db_management -up- db_access_interface
+
+agent_manager -down- knowledge_retrieval_interface
+rag_management -up- knowledge_retrieval_interface
+
+agent_manager -down- tool_call_interface
+mcp_management -up- tool_call_interface
+
+' 组件之间的关系
+cli --> agent_manager : 使用
+
+agent_manager --> task_decomposer : 分解任务
+agent_manager --> sub_task_manager : 管理子任务
+agent_manager --> info_gathering_loop : 收集信息
+agent_manager --> validation_module : 验证结果
+
+agent_manager --> db_management : 存储任务数据
+agent_manager --> rag_management : 检索知识
+agent_manager --> mcp_management : 调用工具
+
+task_decomposer --> db_management : 存储子任务
+task_decomposer --> rag_management : 获取知识
+
+sub_task_manager --> db_management : 更新子任务状态
+sub_task_manager --> rag_management : 获取知识
+sub_task_manager --> mcp_management : 调用工具
+
+info_gathering_loop --> info_requirement_detector : 检测信息需求
+info_requirement_detector --> rag_management : 检索知识
+
+info_requirement_detector --> user_input_processor : 处理用户输入
+user_input_processor --> cli : 交互
+
+user_input_processor --> info_integration_mechanism : 整合信息
+info_integration_mechanism --> db_management : 更新任务信息
+info_integration_mechanism --> rag_management : 更新知识
+
+info_integration_mechanism --> loop_control_logic : 控制循环
+loop_control_logic --> info_requirement_detector : 继续循环
+
+validation_module --> result_validator : 验证结果
+result_validator --> rag_management : 检索知识
+
+result_validator --> validation_report_generator : 生成报告
+validation_report_generator --> db_management : 存储报告
+
+validation_report_generator --> user_confirmation_manager : 用户确认
+user_confirmation_manager --> cli : 交互
+
+db_management --> sqlite : 存储数据
+rag_management --> vector_db : 存储向量
+rag_management --> llm_api : 调用LLM
+mcp_management --> mcp_server : 连接MCP
+
+' 添加注释说明主要交互流程
+note over cli, agent_manager
+  **任务执行流程**
+  1. 用户通过CLI提交任务
+  2. Agent管理器接收任务并开始执行
+end note
+
+note over agent_manager, task_decomposer, sub_task_manager
+  **任务分解流程**
+  1. Agent管理器调用任务分解器
+  2. 任务分解器将任务分解为子任务
+  3. 子任务管理器执行子任务
+end note
+
+note over info_gathering_loop, info_requirement_detector, user_input_processor, info_integration_mechanism, loop_control_logic
+  **信息收集循环**
+  1. 检测信息需求
+  2. 收集用户输入
+  3. 整合信息到任务
+  4. 控制循环流程
+end note
+
+note over validation_module, result_validator, validation_report_generator, user_confirmation_manager
+  **结果验证流程**
+  1. 验证任务结果
+  2. 生成验证报告
+  3. 获取用户确认
+end note
+
+note over db_management, sqlite
+  **数据存储流程**
+  1. 所有模块通过数据库管理接口
+  2. 数据最终存储在SQLite数据库中
+end note
+
+note over rag_management, vector_db, llm_api
+  **知识管理流程**
+  1. 处理文档并生成向量
+  2. 存储在向量数据库中
+  3. 通过LLM接口调用模型
+end note
+
+note over mcp_management, mcp_server
+  **工具管理流程**
+  1. 注册和管理工具
+  2. 通过MCP协议调用工具
+  3. 处理工具调用结果
+end note
+
+@enduml

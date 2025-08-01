@@ -1,0 +1,118 @@
+@startuml 系统架构图
+
+!theme plain
+
+title 智能Agent任务管理系统 - 系统架构图
+
+package "用户界面层" {
+    component [CLI命令行界面] as cli
+}
+
+package "应用层" {
+    component [Agent管理器] as agent_manager
+    component [任务分解器] as task_decomposer
+    component [子任务管理器] as sub_task_manager
+    component [信息收集循环] as info_gathering_loop
+    component [验证模块] as validation_module
+}
+
+package "服务层" {
+    component [数据库管理] as db_management
+    component [RAG知识管理] as rag_management
+    component [MCP工具管理] as mcp_management
+    component [信息需求检测] as info_requirement_detector
+    component [用户输入处理] as user_input_processor
+    component [信息整合机制] as info_integration_mechanism
+    component [循环控制逻辑] as loop_control_logic
+    component [结果验证器] as result_validator
+    component [验证报告生成器] as validation_report_generator
+    component [用户确认管理器] as user_confirmation_manager
+}
+
+package "数据层" {
+    component [SQLite数据库] as sqlite
+    component [向量数据库] as vector_db
+    component [文件系统] as file_system
+}
+
+package "外部接口" {
+    component [LLM接口] as llm_api
+    component [MCP服务器] as mcp_server
+}
+
+' 用户界面层关系
+cli --> agent_manager : 使用
+
+' 应用层关系
+agent_manager --> task_decomposer : 分解任务
+agent_manager --> sub_task_manager : 管理子任务
+agent_manager --> info_gathering_loop : 收集信息
+agent_manager --> validation_module : 验证结果
+
+task_decomposer --> sub_task_manager : 创建子任务
+sub_task_manager --> info_gathering_loop : 触发信息收集
+info_gathering_loop --> validation_module : 验证收集结果
+
+' 服务层关系
+agent_manager --> db_management : 存储任务数据
+agent_manager --> rag_management : 检索知识
+agent_manager --> mcp_management : 调用工具
+
+info_gathering_loop --> info_requirement_detector : 检测信息需求
+info_requirement_detector --> user_input_processor : 处理用户输入
+user_input_processor --> info_integration_mechanism : 整合信息
+info_integration_mechanism --> loop_control_logic : 控制循环
+loop_control_logic --> info_requirement_detector : 继续循环
+
+validation_module --> result_validator : 验证结果
+result_validator --> validation_report_generator : 生成报告
+validation_report_generator --> user_confirmation_manager : 用户确认
+
+' 服务层与数据层关系
+db_management --> sqlite : 存储数据
+rag_management --> vector_db : 存储向量
+mcp_management --> file_system : 访问文件
+
+' 服务层与外部接口关系
+rag_management --> llm_api : 调用LLM
+mcp_management --> mcp_server : 连接MCP
+
+note top of agent_manager
+  **Agent管理器**
+  - 负责任务的整体执行流程
+  - 协调各个模块的工作
+  - 管理任务状态
+end note
+
+note top of info_gathering_loop
+  **信息收集循环**
+  - 检测信息需求
+  - 收集用户输入
+  - 整合信息到任务
+  - 控制循环流程
+end note
+
+note top of validation_module
+  **验证模块**
+  - 验证任务结果
+  - 生成验证报告
+  - 获取用户确认
+end note
+
+note right of rag_management
+  **RAG知识管理**
+  - 文档处理
+  - 向量嵌入
+  - 知识检索
+  - 结果重排
+end note
+
+note right of mcp_management
+  **MCP工具管理**
+  - 工具注册
+  - 权限控制
+  - 工具调用
+  - 结果处理
+end note
+
+@enduml

@@ -1,0 +1,489 @@
+@startuml 类图
+
+!theme plain
+
+title 智能Agent任务管理系统 - 类图
+
+' 数据库管理相关类
+class DatabaseManager {
+  - db_path: str
+  - connection: sqlite3.Connection
+  + __init__(db_path: str)
+  + initialize()
+  + get_connection()
+  + close_connection()
+  + execute_query(query: str, params: tuple = None)
+  + execute_update(query: str, params: tuple = None)
+  + backup(backup_path: str)
+  + restore(backup_path: str)
+}
+
+class TaskHistoryManager {
+  - db_manager: DatabaseManager
+  + __init__(db_manager: DatabaseManager)
+  + initialize()
+  + create_task(task_data: dict)
+  + get_task(task_id: int)
+  + update_task(task_id: int, task_data: dict)
+  + delete_task(task_id: int)
+  + create_sub_task(sub_task_data: dict)
+  + get_sub_tasks(task_id: int)
+  + update_sub_task(sub_task_id: int, sub_task_data: dict)
+  + create_task_result(task_id: int, result_data: dict)
+  + get_task_result(task_id: int)
+  + create_task_validation(task_id: int, validation_data: dict)
+  + get_task_validation(task_id: int)
+  + create_user_confirmation(task_id: int, confirmation_data: dict)
+  + get_user_confirmation(task_id: int)
+}
+
+class ConfigManager {
+  - config_path: str
+  - config: dict
+  + __init__(config_path: str)
+  + initialize()
+  + load_config()
+  + save_config()
+  + get(key: str, default=None)
+  + set(key: str, value)
+  + has(key: str)
+}
+
+class UserManager {
+  - db_manager: DatabaseManager
+  + __init__(db_manager: DatabaseManager)
+  + initialize()
+  + create_user(user_data: dict)
+  + get_user(user_id: int)
+  + get_user_by_username(username: str)
+  + update_user(user_id: int, user_data: dict)
+  + delete_user(user_id: int)
+  + authenticate_user(username: str, password: str)
+}
+
+class KnowledgeSourceManager {
+  - db_manager: DatabaseManager
+  + __init__(db_manager: DatabaseManager)
+  + initialize()
+  + create_knowledge_source(source_data: dict)
+  + get_knowledge_source(source_id: int)
+  + update_knowledge_source(source_id: int, source_data: dict)
+  + delete_knowledge_source(source_id: int)
+  + list_knowledge_sources()
+}
+
+class ToolLogManager {
+  - db_manager: DatabaseManager
+  + __init__(db_manager: DatabaseManager)
+  + initialize()
+  + create_tool_log(log_data: dict)
+  + get_tool_logs(task_id: int = None, tool_name: str = None)
+  + get_tool_log_stats(days: int = 30)
+}
+
+class BackupManager {
+  - db_manager: DatabaseManager
+  - backup_dir: str
+  + __init__(db_manager: DatabaseManager, backup_dir: str)
+  + initialize()
+  + create_backup()
+  + restore_backup(backup_path: str)
+  + list_backups()
+  + delete_backup(backup_path: str)
+  + schedule_backup(interval: int)
+}
+
+' RAG知识管理相关类
+class DocumentProcessor {
+  - supported_formats: list
+  + __init__()
+  + initialize()
+  + process_document(file_path: str) -> dict
+  - _extract_text(file_path: str) -> str
+  - _extract_metadata(file_path: str) -> dict
+  - _chunk_text(text: str, chunk_size: int, overlap: int) -> list
+}
+
+class VectorEmbedder {
+  - model_name: str
+  - model
+  + __init__(model_name: str)
+  + initialize()
+  + embed(text: str) -> list
+  + embed_batch(texts: list) -> list
+  - _load_model()
+}
+
+class VectorDatabase {
+  - db_path: str
+  - dimension: int
+  + __init__(db_path: str, dimension: int)
+  + initialize()
+  - _create_connection()
+  - _create_tables()
+  + add_document(doc_id: str, embeddings: list, metadata: dict)
+  + search(query_embedding: list, limit: int = 10) -> list
+  + delete_document(doc_id: str)
+  + get_document(doc_id: str) -> dict
+}
+
+class Retriever {
+  - vector_database: VectorDatabase
+  - vector_embedder: VectorEmbedder
+  + __init__(vector_database: VectorDatabase, vector_embedder: VectorEmbedder)
+  + initialize()
+  + retrieve(query: str, limit: int = 10) -> list
+  - _retrieve_by_embedding(query_embedding: list, limit: int) -> list
+  - _score_documents(query_embedding: list, documents: list) -> list
+}
+
+class Reranker {
+  - model_name: str
+  - model
+  + __init__(model_name: str)
+  + initialize()
+  + rerank(query: str, documents: list, limit: int = 10) -> list
+  - _load_model()
+}
+
+class KnowledgeManager {
+  - document_processor: DocumentProcessor
+  - vector_embedder: VectorEmbedder
+  - vector_database: VectorDatabase
+  - retriever: Retriever
+  - reranker: Reranker
+  + __init__(db_manager: DatabaseManager, model_name: str)
+  + initialize()
+  + add_document(file_path: str, metadata: dict = None)
+  + search_knowledge(query: str, limit: int = 10) -> list
+  + delete_document(doc_id: str)
+  + list_documents()
+}
+
+' MCP工具管理相关类
+class MCPServer {
+  - server_name: str
+  - server_version: str
+  - tools: dict
+  + __init__(server_name: str, server_version: str)
+  + initialize()
+  + register_tool(tool_name: str, tool_handler: callable)
+  + unregister_tool(tool_name: str)
+  + list_tools() -> list
+  - _handle_request(request: dict) -> dict
+  - _validate_request(request: dict) -> bool
+}
+
+class MCPClient {
+  - server_url: str
+  - api_key: str
+  + __init__(server_url: str, api_key: str)
+  + initialize()
+  + call_tool(tool_name: str, parameters: dict) -> dict
+  + list_tools() -> list
+  - _send_request(request: dict) -> dict
+}
+
+class ToolManager {
+  - db_manager: DatabaseManager
+  - mcp_clients: dict
+  - permission_manager: PermissionManager
+  + __init__(db_manager: DatabaseManager)
+  + initialize()
+  + register_mcp_server(server_name: str, server_url: str, api_key: str)
+  + unregister_mcp_server(server_name: str)
+  + call_tool(tool_name: str, parameters: dict, user_id: int) -> dict
+  + list_tools() -> list
+  - _get_mcp_client(server_name: str) -> MCPClient
+}
+
+class PermissionManager {
+  - db_manager: DatabaseManager
+  + __init__(db_manager: DatabaseManager)
+  + initialize()
+  + check_permission(user_id: int, tool_name: str) -> bool
+  + grant_permission(user_id: int, tool_name: str)
+  + revoke_permission(user_id: int, tool_name: str)
+  + list_permissions(user_id: int) -> list
+}
+
+' Agent流程管理相关类
+class AgentManager {
+  - db_manager: DatabaseManager
+  - task_decomposer: TaskDecomposer
+  - sub_task_manager: SubTaskManager
+  - info_gathering_loop: InfoGatheringLoop
+  - validation_module: ValidationModule
+  - knowledge_manager: KnowledgeManager
+  - tool_manager: ToolManager
+  + __init__(db_manager: DatabaseManager, knowledge_manager: KnowledgeManager, tool_manager: ToolManager)
+  + initialize()
+  + execute_task(task_data: dict) -> dict
+  - _create_task(task_data: dict) -> int
+  - _execute_task_flow(task_id: int) -> dict
+  - _update_task_status(task_id: int, status: str)
+}
+
+class TaskDecomposer {
+  - db_manager: DatabaseManager
+  - knowledge_manager: KnowledgeManager
+  + __init__(db_manager: DatabaseManager, knowledge_manager: KnowledgeManager)
+  + initialize()
+  + decompose_task(task_id: int, task_description: str) -> list
+  - _analyze_task(task_description: str) -> dict
+  - _generate_sub_tasks(task_analysis: dict) -> list
+  - _create_sub_tasks(task_id: int, sub_tasks: list)
+}
+
+class SubTaskManager {
+  - db_manager: DatabaseManager
+  + __init__(db_manager: DatabaseManager)
+  + initialize()
+  + execute_sub_task(sub_task_id: int) -> dict
+  + get_sub_task_status(sub_task_id: int) -> str
+  + update_sub_task_status(sub_task_id: int, status: str)
+  - _execute_sub_task_flow(sub_task_id: int) -> dict
+}
+
+class InfoGatheringLoop {
+  - db_manager: DatabaseManager
+  - info_requirement_detector: InfoRequirementDetector
+  - user_input_processor: UserInputProcessor
+  - info_integration_mechanism: InfoIntegrationMechanism
+  - loop_control_logic: LoopControlLogic
+  + __init__(db_manager: DatabaseManager, interface: InteractiveInterface, knowledge_manager: KnowledgeManager)
+  + initialize()
+  + execute_info_gathering_loop(task_id: int, sub_task_results: list) -> dict
+}
+
+class ValidationModule {
+  - db_manager: DatabaseManager
+  - result_validator: ResultValidator
+  - validation_report_generator: ValidationReportGenerator
+  - user_confirmation_manager: UserConfirmationManager
+  + __init__(db_manager: DatabaseManager, knowledge_manager: KnowledgeManager, interface: InteractiveInterface)
+  + initialize()
+  + validate_task_result(task_id: int, task_result: dict) -> dict
+  - _generate_validation_report(task_id: int, validation_result: dict) -> str
+  - _request_user_confirmation(task_id: int, confirmation_type: str, data: dict) -> dict
+}
+
+' 信息补充循环相关类
+class InfoRequirementDetector {
+  - db_manager: DatabaseManager
+  - knowledge_manager: KnowledgeManager
+  + __init__(db_manager: DatabaseManager, knowledge_manager: KnowledgeManager)
+  + initialize()
+  + detect_info_requirements(task_id: int, sub_task_results: list) -> dict
+  - _detect_missing_info(sub_task_results: list) -> list
+  - _assess_quality(sub_task_results: list) -> dict
+  - _generate_info_requirements(task: dict, missing_info: list, quality_assessment: dict) -> list
+}
+
+class UserInputProcessor {
+  - db_manager: DatabaseManager
+  - interface: InteractiveInterface
+  + __init__(db_manager: DatabaseManager, interface: InteractiveInterface)
+  + initialize()
+  + process_user_input(task_id: int, info_requirements: list) -> dict
+  - _collect_user_inputs(task_id: int, info_requirements: list) -> list
+  - _validate_user_inputs(user_inputs: list) -> list
+  - _parse_user_inputs(validated_inputs: list) -> list
+  - _format_user_inputs(parsed_inputs: list) -> list
+}
+
+class InfoIntegrationMechanism {
+  - db_manager: DatabaseManager
+  - knowledge_manager: KnowledgeManager
+  + __init__(db_manager: DatabaseManager, knowledge_manager: KnowledgeManager)
+  + initialize()
+  + integrate_user_input(task_id: int, user_inputs: list) -> dict
+  - _map_user_inputs(user_inputs: list) -> list
+  - _merge_user_inputs(mapped_inputs: list) -> dict
+  - _update_task_info(task_id: int, merged_inputs: dict) -> dict
+  - _update_sub_task_info(task_id: int, merged_inputs: dict) -> list
+}
+
+class LoopControlLogic {
+  - db_manager: DatabaseManager
+  - info_requirement_detector: InfoRequirementDetector
+  - user_input_processor: UserInputProcessor
+  - info_integration_mechanism: InfoIntegrationMechanism
+  + __init__(db_manager: DatabaseManager, info_requirement_detector: InfoRequirementDetector, user_input_processor: UserInputProcessor, info_integration_mechanism: InfoIntegrationMechanism)
+  + initialize()
+  + execute_info_gathering_loop(task_id: int, sub_task_results: list) -> dict
+  - _check_loop_conditions(loop_state: dict) -> bool
+  - _execute_loop_step(task_id: int, sub_task_results: list, loop_state: dict) -> dict
+  - _should_continue_loop(loop_state: dict) -> bool
+}
+
+' LLM验证模块相关类
+class ResultValidator {
+  - db_manager: DatabaseManager
+  - knowledge_manager: KnowledgeManager
+  + __init__(db_manager: DatabaseManager, knowledge_manager: KnowledgeManager)
+  + initialize()
+  + validate_task_result(task_id: int, task_result: dict) -> dict
+  - _validate_completeness(task_id: int, task_result: dict, task: dict) -> dict
+  - _validate_accuracy(task_id: int, task_result: dict, task: dict) -> dict
+  - _validate_relevance(task_id: int, task_result: dict, task: dict) -> dict
+  - _validate_clarity(task_id: int, task_result: dict, task: dict) -> dict
+  - _validate_timeliness(task_id: int, task_result: dict, task: dict) -> dict
+}
+
+class ValidationReportGenerator {
+  - db_manager: DatabaseManager
+  + __init__(db_manager: DatabaseManager)
+  + initialize()
+  + generate_validation_report(task_id: int, template_type: str = "detailed", format_type: str = "html") -> str
+  - _generate_basic_report(task_id: int, task: dict, task_result: dict, validation_result: dict) -> dict
+  - _generate_detailed_report(task_id: int, task: dict, task_result: dict, validation_result: dict) -> dict
+  - _generate_summary_report(task_id: int, task: dict, task_result: dict, validation_result: dict) -> dict
+  - _generate_executive_report(task_id: int, task: dict, task_result: dict, validation_result: dict) -> dict
+}
+
+class UserConfirmationManager {
+  - db_manager: DatabaseManager
+  - interface: InteractiveInterface
+  + __init__(db_manager: DatabaseManager, interface: InteractiveInterface)
+  + initialize()
+  + request_confirmation(task_id: int, confirmation_type: str, data: dict, message: str = None) -> dict
+  - _handle_task_result_confirmation(task_id: int, confirmation_state: dict) -> dict
+  - _handle_validation_report_confirmation(task_id: int, confirmation_state: dict) -> dict
+  - _handle_improvement_suggestion_confirmation(task_id: int, confirmation_state: dict) -> dict
+  - _handle_task_retry_confirmation(task_id: int, confirmation_state: dict) -> dict
+  - _handle_task_stop_confirmation(task_id: int, confirmation_state: dict) -> dict
+}
+
+' 命令行交互相关类
+class CLIParser {
+  + __init__()
+  + parse_args(args: list) -> dict
+  - _create_parser()
+}
+
+class InteractiveInterface {
+  + __init__()
+  + message(message: str, level: str = "info")
+  + prompt(message: str, default: str = "") -> str
+  + confirm(message: str) -> bool
+  + select(message: str, options: list) -> str
+  - _print_message(message: str, level: str)
+  - _get_input(prompt: str, default: str = "") -> str
+}
+
+class ProgressDisplay {
+  + __init__()
+  + start_progress(message: str, total: int)
+  + update_progress(current: int)
+  + finish_progress()
+  - _format_progress(current: int, total: int) -> str
+}
+
+class ResultFormatter {
+  + __init__()
+  + format_result(result: dict, format_type: str = "text") -> str
+  - _format_text_result(result: dict) -> str
+  - _format_json_result(result: dict) -> str
+  - _format_table_result(result: dict) -> str
+}
+
+class CLIApplication {
+  - db_manager: DatabaseManager
+  - config_manager: ConfigManager
+  - agent_manager: AgentManager
+  - cli_parser: CLIParser
+  - interface: InteractiveInterface
+  - progress_display: ProgressDisplay
+  - result_formatter: ResultFormatter
+  + __init__()
+  + initialize()
+  + run()
+  - _handle_command(command: str, args: dict)
+  - _execute_task(task_description: str)
+  - _list_tasks()
+  - _show_task(task_id: int)
+  - _show_task_result(task_id: int)
+}
+
+' 类之间的关系
+DatabaseManager <|-- TaskHistoryManager
+DatabaseManager <|-- ConfigManager
+DatabaseManager <|-- UserManager
+DatabaseManager <|-- KnowledgeSourceManager
+DatabaseManager <|-- ToolLogManager
+DatabaseManager <|-- BackupManager
+
+DocumentProcessor <|-- KnowledgeManager
+VectorEmbedder <|-- KnowledgeManager
+VectorDatabase <|-- KnowledgeManager
+Retriever <|-- KnowledgeManager
+Reranker <|-- KnowledgeManager
+
+VectorDatabase <|-- Retriever
+VectorEmbedder <|-- Retriever
+
+MCPServer <|-- ToolManager
+MCPClient <|-- ToolManager
+DatabaseManager <|-- ToolManager
+PermissionManager <|-- ToolManager
+
+DatabaseManager <|-- AgentManager
+TaskDecomposer <|-- AgentManager
+SubTaskManager <|-- AgentManager
+InfoGatheringLoop <|-- AgentManager
+ValidationModule <|-- AgentManager
+KnowledgeManager <|-- AgentManager
+ToolManager <|-- AgentManager
+
+DatabaseManager <|-- TaskDecomposer
+KnowledgeManager <|-- TaskDecomposer
+
+DatabaseManager <|-- SubTaskManager
+
+DatabaseManager <|-- InfoGatheringLoop
+InteractiveInterface <|-- InfoGatheringLoop
+KnowledgeManager <|-- InfoGatheringLoop
+InfoRequirementDetector <|-- InfoGatheringLoop
+UserInputProcessor <|-- InfoGatheringLoop
+InfoIntegrationMechanism <|-- InfoGatheringLoop
+LoopControlLogic <|-- InfoGatheringLoop
+
+DatabaseManager <|-- InfoRequirementDetector
+KnowledgeManager <|-- InfoRequirementDetector
+
+DatabaseManager <|-- UserInputProcessor
+InteractiveInterface <|-- UserInputProcessor
+
+DatabaseManager <|-- InfoIntegrationMechanism
+KnowledgeManager <|-- InfoIntegrationMechanism
+
+DatabaseManager <|-- LoopControlLogic
+InfoRequirementDetector <|-- LoopControlLogic
+UserInputProcessor <|-- LoopControlLogic
+InfoIntegrationMechanism <|-- LoopControlLogic
+
+DatabaseManager <|-- ValidationModule
+KnowledgeManager <|-- ValidationModule
+InteractiveInterface <|-- ValidationModule
+ResultValidator <|-- ValidationModule
+ValidationReportGenerator <|-- ValidationModule
+UserConfirmationManager <|-- ValidationModule
+
+DatabaseManager <|-- ResultValidator
+KnowledgeManager <|-- ResultValidator
+
+DatabaseManager <|-- ValidationReportGenerator
+
+DatabaseManager <|-- UserConfirmationManager
+InteractiveInterface <|-- UserConfirmationManager
+
+DatabaseManager <|-- CLIApplication
+ConfigManager <|-- CLIApplication
+AgentManager <|-- CLIApplication
+CLIParser <|-- CLIApplication
+InteractiveInterface <|-- CLIApplication
+ProgressDisplay <|-- CLIApplication
+ResultFormatter <|-- CLIApplication
+
+@enduml
